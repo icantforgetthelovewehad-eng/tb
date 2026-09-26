@@ -1,0 +1,2764 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+local WORKING_KEYS = {
+    "xavier",
+    "y4gami",
+    "acinyc",
+    "bkuzuf",
+    "cftkfs",
+    "cljxvh",
+    "fsqxzy",
+    "hhugfw",
+    "hwhxym",
+    "ibfyxx",
+    "jxklev",
+    "kpinio",
+    "kzblsw",
+    "pgvrhx",
+    "phyfau",
+    "sfggpp",
+    "skwoao",
+    "uhucbp",
+    "wfgtfs",
+    "xgytln",
+    "ziyqel",
+    "zldhxe",
+}
+local TRIGGER_KEY = Enum.UserInputType.MouseButton2
+local TRIGGER_KEYCODE = Enum.KeyCode.Unknown
+local TRIGGER_KEY_LABEL = "MouseButton2"
+local TRIGGER_MODE = "Hold" -- "Hold" or "Toggle"
+local TRIGGER_HELD = false
+local TRIGGER_TOGGLED = false
+local TRIGGER_BIND_LISTENING = false
+local HOST_TRIGGER_ARMED = false
+local SCRIPT_KILLED = false
+local MENU_UNLOCKED = false
+
+-- Players in this table will never be targeted.
+
+-- =========================================================
+-- KEY GATE
+-- =========================================================
+
+local function addSnowflake(layer, rng)
+    local flake = Instance.new("Frame")
+    local size = rng:NextInteger(2, 5)
+
+    flake.Name = "Snowflake"
+    flake.Size = UDim2.fromOffset(size, size)
+
+    flake.Position = UDim2.new(
+        rng:NextNumber(),
+        0,
+        rng:NextNumber(-0.15, 1),
+        0
+    )
+
+    local shade = rng:NextInteger(205, 245)
+
+    flake.BackgroundColor3 = Color3.fromRGB(
+        shade,
+        shade,
+        shade
+    )
+
+    flake.BackgroundTransparency =
+        rng:NextNumber(0.18, 0.58)
+
+    flake.BorderSizePixel = 0
+    flake.ZIndex = layer.ZIndex
+    flake.Active = false
+    flake.Selectable = false
+
+    Instance.new("UICorner", flake).CornerRadius =
+        UDim.new(1, 0)
+
+    flake.Parent = layer
+
+    task.spawn(function()
+        while flake.Parent do
+            local startX = rng:NextNumber(-0.08, 1.08)
+            local duration = rng:NextNumber(4.5, 9.5)
+            local drift = rng:NextNumber(-0.07, 0.07)
+
+            flake.Position = UDim2.new(
+                startX,
+                0,
+                -0.08,
+                0
+            )
+
+            local tween = TweenService:Create(
+                flake,
+                TweenInfo.new(
+                    duration,
+                    Enum.EasingStyle.Linear
+                ),
+                {
+                    Position = UDim2.new(
+                        startX + drift,
+                        0,
+                        1.08,
+                        0
+                    )
+                }
+            )
+
+            tween:Play()
+            tween.Completed:Wait()
+
+            if flake.Parent then
+                task.wait(rng:NextNumber(0, 0.8))
+            end
+        end
+    end)
+end
+
+local function addSnowfall(parent, amount, zIndex)
+    local layer = Instance.new("Frame")
+
+    layer.Name = "Snowfall"
+    layer.Size = UDim2.fromScale(1, 1)
+    layer.BackgroundTransparency = 1
+    layer.BorderSizePixel = 0
+    layer.ClipsDescendants = true
+    layer.ZIndex = zIndex or 1
+    layer.Active = false
+    layer.Selectable = false
+    layer.Parent = parent
+
+    local rng = Random.new()
+
+    for _ = 1, amount do
+        addSnowflake(layer, rng)
+    end
+
+    return layer, rng
+end
+
+local function showKeyGate()
+
+    local gui = Instance.new("ScreenGui")
+
+    gui.Name = "ModernKeyGate"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 999999
+    gui.Parent = CoreGui
+
+    local overlay = Instance.new("Frame")
+
+    overlay.Size = UDim2.fromScale(1, 1)
+    overlay.BackgroundColor3 =
+        Color3.fromRGB(0, 0, 0)
+
+    overlay.BackgroundTransparency = 0.18
+    overlay.BorderSizePixel = 0
+    overlay.Parent = gui
+
+    local snowLayer, snowRng = addSnowfall(
+        overlay,
+        42,
+        1
+    )
+
+    -- Keep adding white snowflakes while the key gate is open.
+    -- They continue accumulating until the key gate is destroyed.
+    task.spawn(function()
+        while gui.Parent do
+            addSnowflake(snowLayer, snowRng)
+            task.wait(0.12)
+        end
+    end)
+
+    local card = Instance.new("Frame")
+
+    card.Size = UDim2.new(
+        0,
+        390,
+        0,
+        250
+    )
+
+    card.Position =
+        UDim2.fromScale(0.5, 0.5)
+
+    card.AnchorPoint =
+        Vector2.new(0.5, 0.5)
+
+    card.BackgroundColor3 =
+        Color3.fromRGB(7, 7, 7)
+
+    card.BackgroundTransparency = 0.08
+    card.BorderSizePixel = 0
+
+    card.Parent = overlay
+    card.ZIndex = 10
+
+    local keyGradient = Instance.new("UIGradient", card)
+    keyGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)),
+        ColorSequenceKeypoint.new(0.55, Color3.fromRGB(22, 22, 22)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(72, 72, 72))
+    })
+    keyGradient.Rotation = 45
+
+    Instance.new("UICorner", card).CornerRadius =
+        UDim.new(0, 18)
+
+    local stroke = Instance.new(
+        "UIStroke",
+        card
+    )
+
+    stroke.Color =
+        Color3.fromRGB(145, 145, 145)
+
+    stroke.Thickness = 1.2
+
+    -- =====================================================
+    -- KEY GATE TITLE
+    -- =====================================================
+
+    local title = Instance.new(
+        "TextLabel",
+        card
+    )
+
+    title.Size =
+        UDim2.new(1, -48, 0, 38)
+
+    title.Position =
+        UDim2.new(0, 24, 0, 27)
+
+    title.BackgroundTransparency = 1
+    title.Text = "ACCESS REQUIRED"
+
+    title.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    title.Font = Enum.Font.GothamBold
+
+    -- Larger title.
+    title.TextSize = 23
+
+    title.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    title.ZIndex = 11
+
+    -- =====================================================
+    -- KEY GATE DESCRIPTION
+    -- =====================================================
+
+    local subtitle = Instance.new(
+        "TextLabel",
+        card
+    )
+
+    subtitle.Size =
+        UDim2.new(1, -48, 0, 30)
+
+    subtitle.Position =
+        UDim2.new(0, 24, 0, 68)
+
+    subtitle.BackgroundTransparency = 1
+
+    subtitle.Text =
+        "Enter your access key to continue"
+
+    subtitle.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    subtitle.Font = Enum.Font.GothamBold
+
+    -- Larger description.
+    subtitle.TextSize = 15
+
+    subtitle.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    subtitle.ZIndex = 11
+
+    -- =====================================================
+    -- KEY INPUT
+    -- =====================================================
+
+    local box = Instance.new(
+        "Frame",
+        card
+    )
+
+    box.Size =
+        UDim2.new(1, -48, 0, 46)
+
+    box.Position =
+        UDim2.new(0, 24, 0, 108)
+
+    -- Same glass/translucent treatment as whitelist panel.
+    box.BackgroundColor3 =
+        Color3.fromRGB(3, 3, 3)
+
+    box.BackgroundTransparency = 0.20
+
+    box.BorderSizePixel = 0
+    box.ZIndex = 11
+    box.Active = true
+
+    Instance.new("UICorner", box).CornerRadius =
+        UDim.new(0, 10)
+
+    local boxStroke = Instance.new(
+        "UIStroke",
+        box
+    )
+
+    boxStroke.Color =
+        Color3.fromRGB(145, 145, 145)
+
+    boxStroke.Transparency = 0.25
+    boxStroke.Thickness = 1.2
+
+    local mask = Instance.new(
+        "TextLabel",
+        box
+    )
+
+    mask.Size =
+        UDim2.new(1, -28, 1, 0)
+
+    mask.Position =
+        UDim2.new(0, 14, 0, 0)
+
+    mask.BackgroundTransparency = 1
+    mask.Text = ""
+
+    mask.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    mask.Font = Enum.Font.GothamBold
+    mask.TextSize = 15
+
+    mask.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    mask.TextYAlignment =
+        Enum.TextYAlignment.Center
+
+    mask.TextTruncate = Enum.TextTruncate.AtEnd
+    mask.ClipsDescendants = true
+
+    mask.ZIndex = 12
+    mask.Active = false
+    mask.Selectable = false
+
+    local caret = Instance.new(
+        "TextLabel",
+        box
+    )
+
+    caret.Size =
+        UDim2.fromOffset(2, 22)
+
+    caret.Position =
+        UDim2.new(0, 14, 0.5, -11)
+
+    caret.BackgroundColor3 =
+        Color3.fromRGB(220, 220, 220)
+
+    caret.BorderSizePixel = 0
+    caret.Text = ""
+    caret.ZIndex = 13
+    caret.Visible = false
+    caret.Active = false
+    caret.Selectable = false
+
+    local placeholder = Instance.new(
+        "TextLabel",
+        box
+    )
+
+    placeholder.Size =
+        UDim2.new(1, -28, 1, 0)
+
+    placeholder.Position =
+        UDim2.new(0, 14, 0, 0)
+
+    placeholder.BackgroundTransparency = 1
+    placeholder.Text = "Key"
+
+    placeholder.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    placeholder.Font =
+        Enum.Font.GothamBold
+
+    placeholder.TextSize = 15
+
+    placeholder.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    placeholder.TextYAlignment =
+        Enum.TextYAlignment.Center
+
+    placeholder.ZIndex = 12
+    placeholder.Active = false
+    placeholder.Selectable = false
+
+    -- Hidden real input.
+    local input = Instance.new(
+        "TextBox",
+        card
+    )
+
+    input.Size =
+        UDim2.fromOffset(1, 1)
+
+    input.Position =
+        UDim2.fromOffset(-100, -100)
+
+    input.BackgroundTransparency = 1
+    input.BorderSizePixel = 0
+
+    input.TextColor3 =
+        Color3.fromRGB(0, 0, 0)
+
+    input.TextTransparency = 1
+    input.TextStrokeTransparency = 1
+    input.PlaceholderText = ""
+    input.Text = ""
+    input.ClearTextOnFocus = false
+    input.MultiLine = false
+    input.Font = Enum.Font.Gotham
+    input.TextSize = 1
+    input.ZIndex = 1
+    input.Visible = true
+
+    local status = Instance.new(
+        "TextLabel",
+        card
+    )
+
+    status.Size =
+        UDim2.new(1, -48, 0, 20)
+
+    status.Position =
+        UDim2.new(0, 24, 0, 158)
+
+    status.BackgroundTransparency = 1
+    status.Text = ""
+
+    status.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    status.Font =
+        Enum.Font.GothamBold
+
+    status.TextSize = 11
+
+    status.TextXAlignment =
+        Enum.TextXAlignment.Left
+
+    status.ZIndex = 11
+
+    local button = Instance.new(
+        "TextButton",
+        card
+    )
+
+    button.Size =
+        UDim2.new(1, -48, 0, 42)
+
+    button.Position =
+        UDim2.new(0, 24, 1, -66)
+
+    button.BackgroundColor3 =
+        Color3.fromRGB(105, 105, 105)
+
+    button.BorderSizePixel = 0
+    button.Text = "CHECK KEY"
+
+    button.TextColor3 =
+        Color3.fromRGB(0, 0, 0)
+    button.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextStrokeTransparency = 0
+
+    button.Font =
+        Enum.Font.GothamBold
+
+    button.TextSize = 13
+    button.AutoButtonColor = false
+    button.ZIndex = 11
+
+    Instance.new("UICorner", button).CornerRadius =
+        UDim.new(0, 10)
+
+    local buttonStroke = Instance.new(
+        "UIStroke",
+        button
+    )
+
+    buttonStroke.Color =
+        Color3.fromRGB(180, 180, 180)
+
+    buttonStroke.Thickness = 1
+
+    -- Drag the key card from any non-interactive area, but never from
+    -- the actual key input field or the check button.
+    local keyDragging = false
+    local keyDragStart
+    local keyStartPosition
+
+    local function pointInsideGuiObject(position, object)
+        local objectPos = object.AbsolutePosition
+        local objectSize = object.AbsoluteSize
+
+        return
+            position.X >= objectPos.X
+            and position.X <= objectPos.X + objectSize.X
+            and position.Y >= objectPos.Y
+            and position.Y <= objectPos.Y + objectSize.Y
+    end
+
+    UserInputService.InputBegan:Connect(function(inputObject)
+        if SCRIPT_KILLED or inputObject.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        if not pointInsideGuiObject(inputObject.Position, card) then
+            return
+        end
+
+        -- The key field is deliberately excluded from dragging.
+        if pointInsideGuiObject(inputObject.Position, box)
+            or pointInsideGuiObject(inputObject.Position, button) then
+            return
+        end
+
+        keyDragging = true
+        keyDragStart = inputObject.Position
+        keyStartPosition = card.Position
+    end)
+
+    UserInputService.InputChanged:Connect(function(inputObject)
+        if SCRIPT_KILLED or not keyDragging then
+            return
+        end
+
+        if inputObject.UserInputType ~= Enum.UserInputType.MouseMovement then
+            return
+        end
+
+        local delta = inputObject.Position - keyDragStart
+
+        card.Position = UDim2.new(
+            keyStartPosition.X.Scale,
+            keyStartPosition.X.Offset + delta.X,
+            keyStartPosition.Y.Scale,
+            keyStartPosition.Y.Offset + delta.Y
+        )
+    end)
+
+    UserInputService.InputEnded:Connect(function(inputObject)
+        if inputObject.UserInputType == Enum.UserInputType.MouseButton1 then
+            keyDragging = false
+        end
+    end)
+
+    local unlocked = false
+
+    local function updateMask()
+
+        local count = #input.Text
+
+        mask.Text =
+            count > 0
+            and string.rep("•", count)
+            or ""
+
+        placeholder.Visible =
+            count == 0
+
+        local maxWidth =
+            box.AbsoluteSize.X - 32
+
+        local width =
+            math.min(mask.TextBounds.X, maxWidth)
+
+        caret.Position =
+            UDim2.new(
+                0,
+                15 + width,
+                0.5,
+                -11
+            )
+
+        caret.Visible =
+            input:IsFocused()
+
+    end
+
+    input:GetPropertyChangedSignal(
+        "Text"
+    ):Connect(function()
+        local cleaned = input.Text:gsub("[\r\n]", "")
+        if cleaned ~= input.Text then
+            input.Text = cleaned
+            return
+        end
+        updateMask()
+    end)
+
+    task.spawn(function()
+
+        while gui.Parent do
+
+            if input:IsFocused() then
+                caret.Visible =
+                    not caret.Visible
+            else
+                caret.Visible = false
+            end
+
+            task.wait(0.5)
+
+        end
+
+    end)
+
+    local function focusKeyInput()
+
+        input:CaptureFocus()
+
+        task.defer(updateMask)
+
+    end
+
+    input.Focused:Connect(function()
+        updateMask()
+    end)
+
+    input.FocusLost:Connect(function()
+        caret.Visible = false
+    end)
+
+    box.InputBegan:Connect(
+        function(inputObject)
+
+            if inputObject.UserInputType ==
+                Enum.UserInputType.MouseButton1 then
+
+                focusKeyInput()
+
+            end
+
+        end
+    )
+
+    local function tryKey()
+
+        local enteredKey = input.Text:lower()
+        local validKey = false
+
+        for _, workingKey in ipairs(WORKING_KEYS) do
+            if enteredKey == workingKey then
+                validKey = true
+                break
+            end
+        end
+
+        if validKey then
+
+            unlocked = true
+            button.Text = "UNLOCKED"
+            status.Text = ""
+
+            task.wait(0.15)
+
+            gui:Destroy()
+
+        else
+
+            status.Text = "Invalid key"
+
+            input.Text = ""
+
+            updateMask()
+            focusKeyInput()
+
+        end
+
+    end
+
+    button.MouseButton1Click:Connect(
+        tryKey
+    )
+
+    mask.InputBegan:Connect(
+        function(inputObject)
+
+            if inputObject.UserInputType ==
+                Enum.UserInputType.MouseButton1 then
+
+                box:CaptureFocus()
+
+            end
+
+        end
+    )
+
+    input.FocusLost:Connect(
+        function(enterPressed)
+
+            if enterPressed then
+                tryKey()
+            end
+
+        end
+    )
+
+    updateMask()
+
+    repeat
+        task.wait()
+    until unlocked or SCRIPT_KILLED
+
+end
+
+-- Emergency kill key. This is registered before the key gate so F7
+-- can close the script even while the key screen is open.
+local killConnection
+killConnection = UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode ~= Enum.KeyCode.F7 then
+        return
+    end
+
+    SCRIPT_KILLED = true
+    TRIGGER_HELD = false
+    TRIGGER_TOGGLED = false
+    HOST_TRIGGER_ARMED = false
+
+    -- Disconnect this emergency handler too so nothing remains listening.
+    if killConnection then
+        killConnection:Disconnect()
+        killConnection = nil
+    end
+
+    -- Stop the render-bound trigger loop as well.
+    pcall(function()
+        RunService:UnbindFromRenderStep("Triggerbot_RenderStep")
+    end)
+
+    -- Destroy every UI created by this script.
+    for _, name in ipairs({"ModernKeyGate", "MinimalWhitelist"}) do
+        local gui = CoreGui:FindFirstChild(name)
+        if gui then
+            gui:Destroy()
+        end
+    end
+end)
+
+-- =========================================================
+-- INITIALIZATION LOADING SCREEN
+-- =========================================================
+-- The loading artwork is embedded directly into this script.
+-- This removes the dependency on manually placing the JPG beside
+-- the script. The script writes the image locally when writefile
+-- and a supported base64 decoder are available.
+local LOADING_IMAGE_FILE = "triggerbot_loading_image.jpg"
+local LOADING_IMAGE_B64 = [[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]]
+
+local function decodeLoadingImage(data)
+    local decoded
+
+    pcall(function()
+        if crypt and type(crypt.base64decode) == "function" then
+            decoded = crypt.base64decode(data)
+        elseif crypt and crypt.base64 and type(crypt.base64.decode) == "function" then
+            decoded = crypt.base64.decode(data)
+        elseif syn and syn.crypt and type(syn.crypt.base64decode) == "function" then
+            decoded = syn.crypt.base64decode(data)
+        elseif syn and syn.crypt and type(syn.crypt.base64) == "function" then
+            decoded = syn.crypt.base64(data)
+        elseif base64 and type(base64.decode) == "function" then
+            decoded = base64.decode(data)
+        elseif type(base64decode) == "function" then
+            decoded = base64decode(data)
+        elseif type(base64_decode) == "function" then
+            decoded = base64_decode(data)
+        end
+    end)
+
+    return decoded
+end
+
+local function getLoadingImage()
+    if type(getcustomasset) ~= "function" then
+        return nil
+    end
+
+    -- Try an already-existing local asset first.
+    local ok, asset = pcall(function()
+        return getcustomasset(LOADING_IMAGE_FILE)
+    end)
+
+    if ok and asset then
+        return asset
+    end
+
+    -- If it is not already present, create it from the embedded image.
+    if type(writefile) == "function" then
+        local decoded = decodeLoadingImage(LOADING_IMAGE_B64)
+
+        if decoded then
+            local wrote = pcall(function()
+                writefile(LOADING_IMAGE_FILE, decoded)
+            end)
+
+            if wrote then
+                local loaded, newAsset = pcall(function()
+                    return getcustomasset(LOADING_IMAGE_FILE)
+                end)
+
+                if loaded and newAsset then
+                    return newAsset
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function showLoadingScreen()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ArmadaLoading"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 1000000
+    gui.Parent = CoreGui
+
+    local overlay = Instance.new("Frame", gui)
+    overlay.Size = UDim2.fromScale(1, 1)
+    overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    overlay.BackgroundTransparency = 0
+    overlay.BorderSizePixel = 0
+    overlay.ZIndex = 1
+
+    local glow = Instance.new("Frame", overlay)
+    glow.Size = UDim2.fromOffset(390, 390)
+    glow.Position = UDim2.fromScale(0.5, 0.43)
+    glow.AnchorPoint = Vector2.new(0.5, 0.5)
+    glow.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    glow.BackgroundTransparency = 0.97
+    glow.BorderSizePixel = 0
+    glow.ZIndex = 2
+    Instance.new("UICorner", glow).CornerRadius = UDim.new(1, 0)
+
+    local image = Instance.new("ImageLabel", overlay)
+    image.Name = "LoadingImage"
+    image.Size = UDim2.fromOffset(190, 190)
+    image.Position = UDim2.fromScale(0.5, 0.40)
+    image.AnchorPoint = Vector2.new(0.5, 0.5)
+    image.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+    image.BackgroundTransparency = 0
+    image.BorderSizePixel = 0
+    image.ScaleType = Enum.ScaleType.Crop
+    image.ZIndex = 3
+
+    local imageCorner = Instance.new("UICorner", image)
+    imageCorner.CornerRadius = UDim.new(1, 0)
+
+    local imageStroke = Instance.new("UIStroke", image)
+    imageStroke.Color = Color3.fromRGB(150, 150, 150)
+    imageStroke.Transparency = 0.35
+    imageStroke.Thickness = 2
+
+    local imageAsset = getLoadingImage()
+    if imageAsset then
+        image.Image = imageAsset
+    else
+        -- Fallback: make the missing asset obvious instead of silently
+        -- showing the empty dark circle.
+        image.BackgroundTransparency = 1
+        imageStroke.Transparency = 1
+    end
+
+    local title = Instance.new("TextLabel", overlay)
+    title.Size = UDim2.fromOffset(500, 34)
+    title.Position = UDim2.fromScale(0.5, 0.57)
+    title.AnchorPoint = Vector2.new(0.5, 0.5)
+    title.BackgroundTransparency = 1
+    title.Text = "Armada"
+    title.TextColor3 = Color3.fromRGB(245, 245, 245)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 23
+    title.TextXAlignment = Enum.TextXAlignment.Center
+    title.ZIndex = 3
+
+    local subtitle = Instance.new("TextLabel", overlay)
+    subtitle.Size = UDim2.fromOffset(500, 24)
+    subtitle.Position = UDim2.fromScale(0.5, 0.605)
+    subtitle.AnchorPoint = Vector2.new(0.5, 0.5)
+    subtitle.BackgroundTransparency = 1
+    subtitle.Text = "Initializing services..."
+    subtitle.TextColor3 = Color3.fromRGB(150, 150, 150)
+    subtitle.Font = Enum.Font.Gotham
+    subtitle.TextSize = 12
+    subtitle.TextXAlignment = Enum.TextXAlignment.Center
+    subtitle.ZIndex = 3
+
+    local progressBack = Instance.new("Frame", overlay)
+    progressBack.Size = UDim2.fromOffset(450, 8)
+    progressBack.Position = UDim2.fromScale(0.5, 0.655)
+    progressBack.AnchorPoint = Vector2.new(0.5, 0.5)
+    progressBack.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    progressBack.BorderSizePixel = 0
+    progressBack.ZIndex = 3
+    Instance.new("UICorner", progressBack).CornerRadius = UDim.new(1, 0)
+
+    local progress = Instance.new("Frame", progressBack)
+    progress.Size = UDim2.new(0, 0, 1, 0)
+    progress.BackgroundColor3 = Color3.fromRGB(245, 245, 245)
+    progress.BorderSizePixel = 0
+    progress.ZIndex = 4
+    Instance.new("UICorner", progress).CornerRadius = UDim.new(1, 0)
+
+    local percent = Instance.new("TextLabel", overlay)
+    percent.Size = UDim2.fromOffset(100, 24)
+    percent.Position = UDim2.fromScale(0.5, 0.695)
+    percent.AnchorPoint = Vector2.new(0.5, 0.5)
+    percent.BackgroundTransparency = 1
+    percent.Text = "0%"
+    percent.TextColor3 = Color3.fromRGB(245, 245, 245)
+    percent.Font = Enum.Font.GothamBold
+    percent.TextSize = 13
+    percent.TextXAlignment = Enum.TextXAlignment.Center
+    percent.ZIndex = 3
+
+    local progressTween = TweenService:Create(
+        progress,
+        TweenInfo.new(2.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+        {Size = UDim2.fromScale(1, 1)}
+    )
+    progressTween:Play()
+
+    local start = os.clock()
+    local duration = 2.4
+    while gui.Parent and os.clock() - start < duration do
+        local alpha = math.clamp((os.clock() - start) / duration, 0, 1)
+        local value = math.floor(alpha * 100 + 0.5)
+        percent.Text = tostring(value) .. "%"
+        task.wait()
+    end
+
+    if gui.Parent then
+        percent.Text = "100%"
+        task.wait(0.12)
+        gui:Destroy()
+    end
+end
+
+showLoadingScreen()
+
+if SCRIPT_KILLED then
+    return
+end
+
+-- =========================================================
+-- HOST UI
+-- =========================================================
+
+local whitelistGui =
+    Instance.new("ScreenGui")
+
+whitelistGui.Name =
+    "MinimalWhitelist"
+
+whitelistGui.ResetOnSpawn = false
+whitelistGui.IgnoreGuiInset = true
+whitelistGui.DisplayOrder = 999998
+whitelistGui.Enabled = true
+whitelistGui.Parent = CoreGui
+
+local wlCard =
+    Instance.new("Frame")
+
+wlCard.Name =
+    "WhitelistPanel"
+
+wlCard.Size =
+    UDim2.fromOffset(300, 650)
+
+wlCard.Position =
+    UDim2.fromScale(0.5, 0.5)
+
+wlCard.AnchorPoint =
+    Vector2.new(0.5, 0.5)
+
+wlCard.BackgroundColor3 =
+    Color3.fromRGB(8, 8, 8)
+
+wlCard.BackgroundTransparency = 0.22
+wlCard.BorderSizePixel = 0
+wlCard.ZIndex = 10
+wlCard.Active = true
+wlCard.ClipsDescendants = false
+
+
+local wlGradient = Instance.new("UIGradient", wlCard)
+wlGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)),
+    ColorSequenceKeypoint.new(0.55, Color3.fromRGB(22, 22, 22)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(72, 72, 72))
+})
+wlGradient.Rotation = 45
+
+wlCard.Parent = whitelistGui
+
+Instance.new("UICorner", wlCard).CornerRadius =
+    UDim.new(0, 18)
+
+-- Small anime image in the top-left corner of the main panel.
+-- Uses the same embedded artwork already used by the script.
+local cornerAnimeImage = Instance.new("ImageLabel", wlCard)
+cornerAnimeImage.Name = "CornerAnimeImage"
+cornerAnimeImage.Size = UDim2.fromOffset(42, 42)
+cornerAnimeImage.Position = UDim2.fromOffset(12, 10)
+cornerAnimeImage.BackgroundTransparency = 1
+cornerAnimeImage.BorderSizePixel = 0
+cornerAnimeImage.ScaleType = Enum.ScaleType.Crop
+cornerAnimeImage.ZIndex = 22
+cornerAnimeImage.Active = false
+cornerAnimeImage.Selectable = false
+
+Instance.new("UICorner", cornerAnimeImage).CornerRadius =
+    UDim.new(1, 0)
+
+local cornerAnimeStroke = Instance.new("UIStroke", cornerAnimeImage)
+cornerAnimeStroke.Color = Color3.fromRGB(145, 145, 145)
+cornerAnimeStroke.Transparency = 0.18
+cornerAnimeStroke.Thickness = 1
+
+local cornerAnimeAsset = getLoadingImage()
+if cornerAnimeAsset then
+    cornerAnimeImage.Image = cornerAnimeAsset
+    -- Keep the corner image hidden during the key/unlock screen.
+    cornerAnimeImage.Visible = false
+else
+    cornerAnimeImage.Visible = false
+end
+
+-- =========================================================
+-- TITLE
+-- =========================================================
+
+local wlTitle =
+    Instance.new("TextLabel", wlCard)
+
+wlTitle.Size =
+    UDim2.new(1, -48, 0, 34)
+
+wlTitle.Position =
+    UDim2.new(0, 24, 0, 20)
+
+wlTitle.BackgroundTransparency = 1
+
+wlTitle.Text =
+    "Armada"
+
+wlTitle.TextColor3 =
+    Color3.fromRGB(255, 255, 255)
+
+wlTitle.Font =
+    Enum.Font.GothamBold
+
+-- Bigger title.
+wlTitle.TextSize = 20
+
+wlTitle.TextXAlignment =
+    Enum.TextXAlignment.Center
+
+wlTitle.TextYAlignment =
+    Enum.TextYAlignment.Center
+
+wlTitle.ZIndex = 13
+wlTitle.Active = false
+
+-- =========================================================
+-- DESCRIPTION
+-- =========================================================
+
+local toggleHint =
+    Instance.new("TextLabel", wlCard)
+
+toggleHint.Size =
+    UDim2.fromOffset(120, 16)
+
+toggleHint.Position =
+    UDim2.new(1, -144, 0, 10)
+
+toggleHint.BackgroundTransparency = 1
+toggleHint.Text = "F4 to toggle UI"
+toggleHint.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleHint.Font = Enum.Font.GothamBold
+toggleHint.TextSize = 12
+toggleHint.TextXAlignment = Enum.TextXAlignment.Right
+toggleHint.TextYAlignment = Enum.TextYAlignment.Center
+toggleHint.ZIndex = 13
+toggleHint.Active = false
+
+local killHint =
+    Instance.new("TextLabel", wlCard)
+
+killHint.Size =
+    UDim2.fromOffset(150, 16)
+
+killHint.Position =
+    UDim2.new(1, -174, 0, 28)
+
+killHint.BackgroundTransparency = 1
+killHint.Text = "F7 to kill script."
+killHint.TextColor3 = Color3.fromRGB(255, 255, 255)
+killHint.Font = Enum.Font.GothamBold
+killHint.TextSize = 12
+killHint.TextXAlignment = Enum.TextXAlignment.Right
+killHint.TextYAlignment = Enum.TextYAlignment.Center
+killHint.ZIndex = 13
+killHint.Active = false
+
+-- =========================================================
+-- HOST / TRIGGER SETTINGS
+-- =========================================================
+
+-- Host selection uses the same compact player-list layout as the old
+-- whitelist/blacklist panel, but it behaves like a single-choice radio list.
+-- Only one HOST can be selected at a time.
+local triggerSection = Instance.new("Frame", wlCard)
+triggerSection.Name = "HostSection"
+triggerSection.Size = UDim2.new(1, -32, 0, 292)
+triggerSection.Position = UDim2.new(0, 16, 0, 62)
+triggerSection.BackgroundColor3 = Color3.fromRGB(2, 2, 2)
+triggerSection.BackgroundTransparency = 0.28
+triggerSection.BorderSizePixel = 0
+triggerSection.ZIndex = 12
+triggerSection.Active = false
+triggerSection.ClipsDescendants = false
+triggerSection.Visible = false
+
+Instance.new("UICorner", triggerSection).CornerRadius = UDim.new(0, 14)
+
+local triggerStroke = Instance.new("UIStroke", triggerSection)
+triggerStroke.Color = Color3.fromRGB(145, 145, 145)
+triggerStroke.Transparency = 0.25
+triggerStroke.Thickness = 1
+
+local triggerTitle = Instance.new("TextLabel", triggerSection)
+triggerTitle.Size = UDim2.new(1, -24, 0, 22)
+triggerTitle.Position = UDim2.new(0, 12, 0, 7)
+triggerTitle.BackgroundTransparency = 1
+triggerTitle.Text = "HOST"
+triggerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+triggerTitle.Font = Enum.Font.GothamBold
+triggerTitle.TextSize = 9
+triggerTitle.TextXAlignment = Enum.TextXAlignment.Left
+triggerTitle.ZIndex = 13
+
+local hostSearchBox = Instance.new("TextBox", triggerSection)
+hostSearchBox.Size = UDim2.new(1, -24, 0, 30)
+hostSearchBox.Position = UDim2.new(0, 12, 0, 34)
+hostSearchBox.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+hostSearchBox.BackgroundTransparency = 0.08
+hostSearchBox.BorderSizePixel = 0
+hostSearchBox.Text = ""
+hostSearchBox.PlaceholderText = "Search players..."
+hostSearchBox.PlaceholderColor3 = Color3.fromRGB(165, 165, 165)
+hostSearchBox.TextColor3 = Color3.fromRGB(245, 245, 245)
+hostSearchBox.Font = Enum.Font.Gotham
+hostSearchBox.TextSize = 9
+hostSearchBox.TextXAlignment = Enum.TextXAlignment.Left
+hostSearchBox.ClearTextOnFocus = false
+hostSearchBox.ZIndex = 14
+Instance.new("UICorner", hostSearchBox).CornerRadius = UDim.new(0, 8)
+
+local hostList = Instance.new("ScrollingFrame", triggerSection)
+hostList.Name = "HostPlayerList"
+hostList.Size = UDim2.new(1, -24, 0, 175)
+hostList.Position = UDim2.new(0, 12, 0, 70)
+hostList.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+hostList.BackgroundTransparency = 0.12
+hostList.BorderSizePixel = 0
+hostList.ZIndex = 14
+hostList.ClipsDescendants = true
+hostList.Active = true
+hostList.CanvasSize = UDim2.new(0, 0, 0, 0)
+hostList.AutomaticCanvasSize = Enum.AutomaticSize.None
+hostList.ScrollBarThickness = 4
+hostList.ScrollingDirection = Enum.ScrollingDirection.Y
+hostList.ElasticBehavior = Enum.ElasticBehavior.Never
+Instance.new("UICorner", hostList).CornerRadius = UDim.new(0, 8)
+
+local hostListLayout = Instance.new("UIListLayout", hostList)
+hostListLayout.Padding = UDim.new(0, 3)
+hostListLayout.SortOrder = Enum.SortOrder.Name
+hostListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local target1Status = Instance.new("TextLabel", triggerSection)
+target1Status.Size = UDim2.new(1, -24, 0, 18)
+target1Status.Position = UDim2.new(0, 12, 1, -28)
+target1Status.BackgroundTransparency = 1
+target1Status.Text = "Select one HOST. Hold the key before the HOST shoots."
+target1Status.TextColor3 = Color3.fromRGB(145, 145, 145)
+target1Status.Font = Enum.Font.Gotham
+target1Status.TextSize = 8
+target1Status.TextXAlignment = Enum.TextXAlignment.Left
+target1Status.ZIndex = 13
+
+local keybindSection = Instance.new("Frame", wlCard)
+keybindSection.Name = "KeybindsSection"
+keybindSection.Size = UDim2.new(1, -32, 0, 88)
+keybindSection.Position = UDim2.new(0, 16, 0, 362)
+keybindSection.BackgroundColor3 = Color3.fromRGB(2, 2, 2)
+keybindSection.BackgroundTransparency = 0.28
+keybindSection.BorderSizePixel = 0
+keybindSection.ZIndex = 12
+keybindSection.Active = false
+keybindSection.Visible = false
+Instance.new("UICorner", keybindSection).CornerRadius = UDim.new(0, 14)
+
+local keybindStroke = Instance.new("UIStroke", keybindSection)
+keybindStroke.Color = Color3.fromRGB(145, 145, 145)
+keybindStroke.Transparency = 0.25
+keybindStroke.Thickness = 1
+
+local keybindTitle = Instance.new("TextLabel", keybindSection)
+keybindTitle.Size = UDim2.new(1, -24, 0, 16)
+keybindTitle.Position = UDim2.new(0, 12, 0, 6)
+keybindTitle.BackgroundTransparency = 1
+keybindTitle.Text = "KEYBINDS"
+keybindTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+keybindTitle.Font = Enum.Font.GothamBold
+keybindTitle.TextSize = 8
+keybindTitle.TextXAlignment = Enum.TextXAlignment.Left
+keybindTitle.ZIndex = 13
+
+local triggerKeyButton = Instance.new("TextButton", keybindSection)
+triggerKeyButton.Size = UDim2.new(1, -24, 0, 28)
+triggerKeyButton.Position = UDim2.new(0, 12, 0, 30)
+triggerKeyButton.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+triggerKeyButton.BackgroundTransparency = 0.08
+triggerKeyButton.BorderSizePixel = 0
+triggerKeyButton.Text = TRIGGER_KEY_LABEL
+triggerKeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+triggerKeyButton.Font = Enum.Font.GothamBold
+triggerKeyButton.TextSize = 9
+triggerKeyButton.AutoButtonColor = false
+triggerKeyButton.ZIndex = 14
+Instance.new("UICorner", triggerKeyButton).CornerRadius = UDim.new(0, 8)
+
+local triggerModeTitle = Instance.new("TextLabel", keybindSection)
+triggerModeTitle.Size = UDim2.new(0, 46, 0, 18)
+triggerModeTitle.Position = UDim2.new(0, 12, 0, 63)
+triggerModeTitle.BackgroundTransparency = 1
+triggerModeTitle.Text = "MODE"
+triggerModeTitle.TextColor3 = Color3.fromRGB(145, 145, 145)
+triggerModeTitle.Font = Enum.Font.GothamBold
+triggerModeTitle.TextSize = 8
+triggerModeTitle.TextXAlignment = Enum.TextXAlignment.Left
+triggerModeTitle.ZIndex = 14
+
+local triggerModeButtons = {}
+local triggerModeLabels = {Hold = "HOLD", Toggle = "TOGGLE"}
+
+local function updateTriggerModeUI()
+    for mode, button in pairs(triggerModeButtons) do
+        if mode == TRIGGER_MODE then
+            button.BackgroundColor3 = Color3.fromRGB(48, 48, 48)
+            button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            button.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+            button.TextColor3 = Color3.fromRGB(165, 165, 165)
+        end
+    end
+end
+
+for i, mode in ipairs({"Hold", "Toggle"}) do
+    local button = Instance.new("TextButton", keybindSection)
+    button.Size = UDim2.fromOffset(90, 20)
+    button.Position = UDim2.new(0, 56 + ((i - 1) * 96), 0, 64)
+    button.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    button.BackgroundTransparency = 0.08
+    button.BorderSizePixel = 0
+    button.Text = triggerModeLabels[mode]
+    button.TextColor3 = Color3.fromRGB(165, 165, 165)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 8
+    button.AutoButtonColor = false
+    button.ZIndex = 14
+    Instance.new("UICorner", button).CornerRadius = UDim.new(0, 7)
+    triggerModeButtons[mode] = button
+
+    button.MouseButton1Click:Connect(function()
+        if SCRIPT_KILLED or not MENU_UNLOCKED then return end
+        TRIGGER_MODE = mode
+        TRIGGER_HELD = false
+        TRIGGER_TOGGLED = false
+        HOST_TRIGGER_ARMED = false
+        AIM_ASSIST_TARGET = nil
+        updateTriggerModeUI()
+    end)
+end
+updateTriggerModeUI()
+
+local HOST_DELAY_MS = 75
+local AIM_ASSIST_ENABLED = true
+local AIM_ASSIST_RADIUS = 50
+local AIM_ASSIST_STRENGTH = 0.020
+local AIM_ASSIST_TARGET = nil
+
+local speedSection = Instance.new("Frame", wlCard)
+speedSection.Name = "SpeedSection"
+speedSection.Size = UDim2.new(1, -32, 0, 72)
+speedSection.Position = UDim2.new(0, 16, 0, 458)
+speedSection.BackgroundColor3 = Color3.fromRGB(2, 2, 2)
+speedSection.BackgroundTransparency = 0.28
+speedSection.BorderSizePixel = 0
+speedSection.ZIndex = 12
+speedSection.Active = false
+speedSection.Visible = false
+Instance.new("UICorner", speedSection).CornerRadius = UDim.new(0, 14)
+
+local speedStroke = Instance.new("UIStroke", speedSection)
+speedStroke.Color = Color3.fromRGB(145, 145, 145)
+speedStroke.Transparency = 0.25
+speedStroke.Thickness = 1
+
+local speedTitle = Instance.new("TextLabel", speedSection)
+speedTitle.Size = UDim2.new(1, -24, 0, 16)
+speedTitle.Position = UDim2.new(0, 12, 0, 6)
+speedTitle.BackgroundTransparency = 1
+speedTitle.Text = "HOST SHOT DELAY (MS)"
+speedTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedTitle.Font = Enum.Font.GothamBold
+speedTitle.TextSize = 8
+speedTitle.TextXAlignment = Enum.TextXAlignment.Left
+speedTitle.ZIndex = 13
+
+local speedInput = Instance.new("TextBox", speedSection)
+speedInput.Size = UDim2.new(1, -24, 0, 28)
+speedInput.Position = UDim2.new(0, 12, 0, 30)
+speedInput.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+speedInput.BackgroundTransparency = 0.08
+speedInput.BorderSizePixel = 0
+speedInput.Text = tostring(HOST_DELAY_MS)
+speedInput.PlaceholderText = "Milliseconds"
+speedInput.PlaceholderColor3 = Color3.fromRGB(145, 145, 145)
+speedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedInput.Font = Enum.Font.GothamBold
+speedInput.TextSize = 9
+speedInput.TextXAlignment = Enum.TextXAlignment.Center
+speedInput.ClearTextOnFocus = false
+speedInput.ZIndex = 14
+Instance.new("UICorner", speedInput).CornerRadius = UDim.new(0, 8)
+
+local function applyHostDelay()
+    local value = tonumber(speedInput.Text)
+    if not value then
+        speedInput.Text = tostring(HOST_DELAY_MS)
+        return
+    end
+
+    value = math.floor(math.clamp(value, 0, 2000))
+    HOST_DELAY_MS = value
+    speedInput.Text = tostring(HOST_DELAY_MS)
+end
+
+speedInput.FocusLost:Connect(function()
+    applyHostDelay()
+end)
+
+-- =========================================================
+-- AIM ASSIST SETTINGS
+-- =========================================================
+local aimAssistSection = Instance.new("Frame", wlCard)
+aimAssistSection.Name = "AimAssistSection"
+aimAssistSection.Size = UDim2.new(1, -32, 0, 92)
+aimAssistSection.Position = UDim2.new(0, 16, 0, 538)
+aimAssistSection.BackgroundColor3 = Color3.fromRGB(2, 2, 2)
+aimAssistSection.BackgroundTransparency = 0.28
+aimAssistSection.BorderSizePixel = 0
+aimAssistSection.ZIndex = 12
+aimAssistSection.Active = false
+aimAssistSection.Visible = false
+Instance.new("UICorner", aimAssistSection).CornerRadius = UDim.new(0, 14)
+
+local aimAssistStroke = Instance.new("UIStroke", aimAssistSection)
+aimAssistStroke.Color = Color3.fromRGB(145, 145, 145)
+aimAssistStroke.Transparency = 0.25
+aimAssistStroke.Thickness = 1
+
+local aimAssistTitle = Instance.new("TextLabel", aimAssistSection)
+aimAssistTitle.Size = UDim2.new(1, -24, 0, 16)
+aimAssistTitle.Position = UDim2.new(0, 12, 0, 6)
+aimAssistTitle.BackgroundTransparency = 1
+aimAssistTitle.Text = "AIM ASSIST"
+aimAssistTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+aimAssistTitle.Font = Enum.Font.GothamBold
+aimAssistTitle.TextSize = 8
+aimAssistTitle.TextXAlignment = Enum.TextXAlignment.Left
+aimAssistTitle.ZIndex = 13
+
+local aimRangeTitle = Instance.new("TextLabel", aimAssistSection)
+aimRangeTitle.Size = UDim2.new(0.45, -16, 0, 14)
+aimRangeTitle.Position = UDim2.new(0, 12, 0, 28)
+aimRangeTitle.BackgroundTransparency = 1
+aimRangeTitle.Text = "RANGE (PX)"
+aimRangeTitle.TextColor3 = Color3.fromRGB(145, 145, 145)
+aimRangeTitle.Font = Enum.Font.GothamBold
+aimRangeTitle.TextSize = 7
+aimRangeTitle.TextXAlignment = Enum.TextXAlignment.Left
+aimRangeTitle.ZIndex = 13
+
+local aimStrengthTitle = aimRangeTitle:Clone()
+aimStrengthTitle.Parent = aimAssistSection
+aimStrengthTitle.Position = UDim2.new(0.55, 0, 0, 28)
+aimStrengthTitle.Text = "STRENGTH (1-100)"
+
+local aimRangeInput = Instance.new("TextBox", aimAssistSection)
+aimRangeInput.Size = UDim2.new(0.45, -16, 0, 28)
+aimRangeInput.Position = UDim2.new(0, 12, 0, 48)
+aimRangeInput.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+aimRangeInput.BackgroundTransparency = 0.08
+aimRangeInput.BorderSizePixel = 0
+aimRangeInput.Text = tostring(AIM_ASSIST_RADIUS)
+aimRangeInput.PlaceholderText = "Pixels"
+aimRangeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+aimRangeInput.PlaceholderColor3 = Color3.fromRGB(145, 145, 145)
+aimRangeInput.Font = Enum.Font.GothamBold
+aimRangeInput.TextSize = 9
+aimRangeInput.TextXAlignment = Enum.TextXAlignment.Center
+aimRangeInput.ClearTextOnFocus = false
+aimRangeInput.ZIndex = 14
+Instance.new("UICorner", aimRangeInput).CornerRadius = UDim.new(0, 8)
+
+local aimStrengthInput = aimRangeInput:Clone()
+aimStrengthInput.Parent = aimAssistSection
+aimStrengthInput.Position = UDim2.new(0.55, 0, 0, 48)
+aimStrengthInput.Text = "20"
+
+local function applyAimAssistSettings()
+    local radius = tonumber(aimRangeInput.Text)
+    if radius then
+        AIM_ASSIST_RADIUS = math.floor(math.clamp(radius, 5, 500))
+    end
+    aimRangeInput.Text = tostring(AIM_ASSIST_RADIUS)
+
+    local strengthLevel = tonumber(aimStrengthInput.Text)
+    if strengthLevel then
+        strengthLevel = math.floor(math.clamp(strengthLevel, 0, 100))
+        AIM_ASSIST_STRENGTH = strengthLevel / 1000
+    end
+
+    local displayStrength = math.floor(math.clamp(AIM_ASSIST_STRENGTH * 1000, 0, 100) + 0.5)
+    aimStrengthInput.Text = tostring(displayStrength)
+end
+
+aimRangeInput.FocusLost:Connect(applyAimAssistSettings)
+aimStrengthInput.FocusLost:Connect(applyAimAssistSettings)
+
+local selectedActivator = nil
+local activatorPulseUntil = 0
+local activatorFireAt = 0
+local activatorConnections = {}
+local activatorAnimationConnections = {}
+
+local function disconnectActivator()
+    for _, c in ipairs(activatorConnections) do
+        pcall(function() c:Disconnect() end)
+    end
+    for _, c in ipairs(activatorAnimationConnections) do
+        pcall(function() c:Disconnect() end)
+    end
+    activatorConnections = {}
+    activatorAnimationConnections = {}
+end
+
+local function isLikelyTracerObject(instance)
+    if not instance then
+        return false
+    end
+
+    -- Beam is the preferred signal. Trail is deliberately excluded because
+    -- knife/melee weapons commonly use Trails and would create false shots.
+    if instance:IsA("Beam") then
+        return true
+    end
+
+    if instance:IsA("BasePart") then
+        local n = string.lower(instance.Name or "")
+
+        -- Prefer explicit projectile/tracer naming.
+        if n:find("tracer", 1, true)
+            or n:find("bullet", 1, true)
+            or n:find("projectile", 1, true)
+            or n:find("bulletline", 1, true)
+            or n:find("shotline", 1, true) then
+            return true
+        end
+
+        -- Fallback for unnamed visual line parts.
+        local size = instance.Size
+        local smallest = math.min(size.X, size.Y, size.Z)
+        local largest = math.max(size.X, size.Y, size.Z)
+
+        return instance.CanCollide == false
+            and instance.Transparency < 1
+            and smallest <= 0.20
+            and largest >= 3.0
+    end
+
+    return false
+end
+
+local function getEffectPosition(instance)
+    if not instance then
+        return nil
+    end
+
+    if instance:IsA("Beam") then
+        local a0 = instance.Attachment0
+        local a1 = instance.Attachment1
+        if a0 then return a0.WorldPosition end
+        if a1 then return a1.WorldPosition end
+    elseif instance:IsA("Attachment") then
+        return instance.WorldPosition
+    elseif instance:IsA("BasePart") then
+        return instance.Position
+    end
+
+    local parent = instance.Parent
+    if parent and parent:IsA("BasePart") then
+        return parent.Position
+    end
+
+    return nil
+end
+
+local function getNearestPlayerToPosition(position, maxDistance)
+    if not position then return nil, math.huge end
+
+    local nearest = nil
+    local nearestDistance = maxDistance or math.huge
+
+    for _, candidate in ipairs(Players:GetPlayers()) do
+        if candidate ~= LocalPlayer and candidate.Character then
+            local root = candidate.Character:FindFirstChild("HumanoidRootPart")
+                or candidate.Character:FindFirstChild("UpperTorso")
+                or candidate.Character:FindFirstChild("Torso")
+
+            if root and root:IsA("BasePart") then
+                local distance = (root.Position - position).Magnitude
+                if distance < nearestDistance then
+                    nearest = candidate
+                    nearestDistance = distance
+                end
+            end
+        end
+    end
+
+    return nearest, nearestDistance
+end
+
+local function isOwnedByActivator(player, instance)
+    local character = player and player.Character
+    if not character or not instance then
+        return false
+    end
+
+    -- First choice: the game's effect is directly parented to the HOST.
+    if instance:IsDescendantOf(character) then
+        return true
+    end
+
+    if instance:IsA("Beam") then
+        local a0 = instance.Attachment0
+        local a1 = instance.Attachment1
+
+        if (a0 and a0:IsDescendantOf(character))
+            or (a1 and a1:IsDescendantOf(character)) then
+            return true
+        end
+    end
+
+    -- Many Roblox weapons clone their tracer into Workspace instead of
+    -- keeping it under the character. In that case, identify the shooter by
+    -- the tracer's origin and require the selected HOST to be the nearest
+    -- player. This is much stricter than simply checking whether the effect
+    -- is close to the HOST.
+    local position = getEffectPosition(instance)
+    if not position then
+        return false
+    end
+
+    local nearest = getNearestPlayerToPosition(position, 12)
+    return nearest == player
+end
+
+local function hostHasMeleeWeapon(player)
+    local character = player and player.Character
+    if not character then return false end
+
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            local n = string.lower(child.Name or "")
+            if n:find("knife", 1, true)
+                or n:find("melee", 1, true)
+                or n:find("sword", 1, true)
+                or n:find("katana", 1, true)
+                or n:find("blade", 1, true) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function pulseActivator(player, reason)
+    -- The selected HOST is the only player that can ever arm the trigger.
+    -- Ignore all shot-like effects while the HOST is holding a melee weapon.
+    if SCRIPT_KILLED or not MENU_UNLOCKED or player ~= selectedActivator or not TRIGGER_HELD then
+        return
+    end
+
+    if hostHasMeleeWeapon(player) then
+        HOST_TRIGGER_ARMED = false
+        activatorPulseUntil = 0
+        activatorFireAt = 0
+        return
+    end
+
+    -- Add a short reaction delay after the HOST shot is detected.
+    -- This is timed from the shot detection itself; it does NOT wait for
+    -- the tracer/beam to disappear.
+    if not HOST_TRIGGER_ARMED then
+        activatorFireAt = os.clock() + (HOST_DELAY_MS / 1000)
+    end
+    activatorPulseUntil = os.clock()
+    HOST_TRIGGER_ARMED = true
+    target1Status.Text = "HOST SHOT — TRIGGER ARMED"
+end
+
+local function watchActivator(player)
+    disconnectActivator()
+    activatorPulseUntil = 0
+    activatorFireAt = 0
+    HOST_TRIGGER_ARMED = false
+
+    if not player then
+        target1Status.Text = "Select one HOST. Hold the key before the HOST shoots."
+        return
+    end
+
+    target1Status.Text = "Watching " .. player.Name .. "..."
+
+    local function watchTracer(instance)
+        if not instance or not isLikelyTracerObject(instance) then
+            return
+        end
+
+        if hostHasMeleeWeapon(player) then
+            return
+        end
+
+        -- Never use proximity as proof of ownership. Only accept effects
+        -- actually belonging to the selected HOST.
+        if not isOwnedByActivator(player, instance) then
+            return
+        end
+
+        pulseActivator(player, "host-tracer")
+    end
+
+    local function watchExistingEffect(instance)
+        if not instance then return end
+
+        -- Only Beam effects are treated as gunshot tracers. Trails are
+        -- intentionally ignored because knives/melee weapons commonly use
+        -- them.
+        if instance:IsA("Beam") then
+            local connection = instance:GetPropertyChangedSignal("Enabled"):Connect(function()
+                if instance.Enabled and isOwnedByActivator(player, instance) then
+                    pulseActivator(player, "host-tracer-enabled")
+                end
+            end)
+            table.insert(activatorConnections, connection)
+
+            if instance.Enabled and isOwnedByActivator(player, instance) then
+                pulseActivator(player, "host-existing-tracer")
+            end
+        end
+    end
+
+    local function watchCharacter(character)
+        if not character then return end
+
+        -- Anything under the HOST's character is unambiguously associated
+        -- with the selected HOST.
+        for _, descendant in ipairs(character:GetDescendants()) do
+            watchExistingEffect(descendant)
+        end
+
+        table.insert(activatorConnections,
+            character.DescendantAdded:Connect(function(descendant)
+                watchExistingEffect(descendant)
+                watchTracer(descendant)
+            end)
+        )
+    end
+
+    -- Workspace-parented tracers are common in weapon systems. Watch both
+    -- Beams and explicit tracer/projectile Parts, then associate the effect
+    -- with the nearest player at its origin. Only the selected HOST can arm.
+    table.insert(activatorConnections,
+        workspace.DescendantAdded:Connect(function(descendant)
+            if player ~= selectedActivator then return end
+            if not isLikelyTracerObject(descendant) then return end
+            if not isOwnedByActivator(player, descendant) then return end
+
+            watchTracer(descendant)
+
+            if descendant:IsA("Beam") then
+                watchExistingEffect(descendant)
+            end
+        end)
+    )
+
+    watchCharacter(player.Character)
+
+    table.insert(activatorConnections,
+        player.CharacterAdded:Connect(function(character)
+            task.wait()
+            if player == selectedActivator then
+                watchActivator(player)
+            end
+        end)
+    )
+end
+
+local function updateHostListCanvas()
+    task.defer(function()
+        if not hostList.Parent then return end
+        hostList.CanvasSize = UDim2.fromOffset(0, hostListLayout.AbsoluteContentSize.Y + 4)
+    end)
+end
+
+local function updateHostCheckbox(option, player, selected)
+    if not option or not option.Parent then return end
+    local box = option:FindFirstChild("CheckBox")
+    if not box then return end
+
+    box.BackgroundColor3 = selected and Color3.fromRGB(235, 235, 235) or Color3.fromRGB(28, 28, 28)
+    box.BackgroundTransparency = selected and 0 or 0.05
+
+    local mark = box:FindFirstChild("Mark")
+    if mark then
+        mark.Visible = selected
+    end
+end
+
+local function selectActivator(player)
+    if player == LocalPlayer then
+        player = nil
+    end
+
+    selectedActivator = player
+    HOST_TRIGGER_ARMED = false
+    target1Status.Text = player
+        and ("HOST: " .. player.Name .. " — " .. (TRIGGER_MODE == "Toggle" and "toggle " or "hold ") .. TRIGGER_KEY_LABEL .. " before the shot.")
+        or "Select one HOST. " .. (TRIGGER_MODE == "Toggle" and "Toggle " or "Hold ") .. TRIGGER_KEY_LABEL .. " before the HOST shoots."
+
+    if player then
+        watchActivator(player)
+    else
+        disconnectActivator()
+    end
+end
+
+local function rebuildHostList()
+    for _, child in ipairs(hostList:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local query = string.lower(hostSearchBox.Text or "")
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local haystack = string.lower(player.Name .. " " .. player.DisplayName)
+            if query == "" or haystack:find(query, 1, true) then
+                local option = Instance.new("TextButton")
+                option.Name = "HostOption_" .. player.UserId
+                option.Size = UDim2.new(1, -8, 0, 30)
+                option.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+                option.BackgroundTransparency = 0.05
+                option.BorderSizePixel = 0
+                option.Text = ""
+                option.AutoButtonColor = false
+                option.ZIndex = 15
+                option.Parent = hostList
+                Instance.new("UICorner", option).CornerRadius = UDim.new(0, 7)
+
+                local nameLabel = Instance.new("TextLabel", option)
+                nameLabel.Size = UDim2.new(1, -52, 1, 0)
+                nameLabel.Position = UDim2.new(0, 10, 0, 0)
+                nameLabel.BackgroundTransparency = 1
+                nameLabel.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+                nameLabel.TextColor3 = Color3.fromRGB(235, 235, 235)
+                nameLabel.Font = Enum.Font.GothamBold
+                nameLabel.TextSize = 9
+                nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                nameLabel.ZIndex = 16
+
+                local box = Instance.new("Frame", option)
+                box.Name = "CheckBox"
+                box.Size = UDim2.fromOffset(20, 20)
+                box.Position = UDim2.new(1, -30, 0.5, -10)
+                box.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+                box.BorderSizePixel = 0
+                box.ZIndex = 16
+                Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
+
+                local mark = Instance.new("TextLabel", box)
+                mark.Name = "Mark"
+                mark.Size = UDim2.fromScale(1, 1)
+                mark.BackgroundTransparency = 1
+                mark.Text = "✓"
+                mark.TextColor3 = Color3.fromRGB(20, 20, 20)
+                mark.Font = Enum.Font.GothamBold
+                mark.TextSize = 13
+                mark.Visible = player == selectedActivator
+                mark.ZIndex = 17
+
+                updateHostCheckbox(option, player, player == selectedActivator)
+
+                option.MouseButton1Click:Connect(function()
+                    if SCRIPT_KILLED or not MENU_UNLOCKED then return end
+                    selectActivator(player)
+                    rebuildHostList()
+                end)
+            end
+        end
+    end
+
+    updateHostListCanvas()
+end
+
+hostSearchBox:GetPropertyChangedSignal("Text"):Connect(rebuildHostList)
+hostListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateHostListCanvas)
+
+Players.PlayerAdded:Connect(function()
+    task.defer(rebuildHostList)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if player == selectedActivator then
+        selectActivator(nil)
+    end
+    task.defer(rebuildHostList)
+end)
+
+-- =========================================================
+-- IN-MENU KEY UNLOCK
+-- The main menu is visible immediately after the anime loading
+-- screen, but all controls remain locked until a valid key is entered.
+-- =========================================================
+
+-- =========================================================
+-- LOCKED KEY UI
+-- Anime image and keypad are intentionally separate areas.
+-- The whitelist/keybind controls remain hidden until unlock.
+-- =========================================================
+
+-- Circular anime image above the keypad.
+local unlockImage = Instance.new("ImageLabel", wlCard)
+unlockImage.Name = "AnimeImage"
+unlockImage.Size = UDim2.fromOffset(92, 92)
+unlockImage.Position = UDim2.new(0.5, 0, 0, 104)
+unlockImage.AnchorPoint = Vector2.new(0.5, 0)
+unlockImage.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+unlockImage.BackgroundTransparency = 0
+unlockImage.BorderSizePixel = 0
+unlockImage.ScaleType = Enum.ScaleType.Crop
+unlockImage.ZIndex = 22
+unlockImage.Active = false
+unlockImage.Selectable = false
+
+-- Full circle instead of the rounded-square image from the previous version.
+Instance.new("UICorner", unlockImage).CornerRadius = UDim.new(1, 0)
+
+local unlockImageStroke = Instance.new("UIStroke", unlockImage)
+unlockImageStroke.Color = Color3.fromRGB(145, 145, 145)
+unlockImageStroke.Transparency = 0.18
+unlockImageStroke.Thickness = 1.2
+
+local unlockImageAsset = getLoadingImage()
+if unlockImageAsset then
+    unlockImage.Image = unlockImageAsset
+else
+    unlockImage.BackgroundTransparency = 1
+    unlockImageStroke.Transparency = 1
+end
+
+-- Separate keypad area. The anime image is NOT inside this frame.
+local unlockPanel = Instance.new("Frame", wlCard)
+unlockPanel.Name = "EnterKeyPanel"
+unlockPanel.Size = UDim2.fromOffset(270, 112)
+unlockPanel.Position = UDim2.new(0.5, 0, 0, 214)
+unlockPanel.AnchorPoint = Vector2.new(0.5, 0)
+unlockPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+unlockPanel.BackgroundTransparency = 0.04
+unlockPanel.BorderSizePixel = 0
+unlockPanel.ZIndex = 21
+unlockPanel.Active = true
+
+Instance.new("UICorner", unlockPanel).CornerRadius = UDim.new(0, 12)
+
+local unlockStroke = Instance.new("UIStroke", unlockPanel)
+unlockStroke.Color = Color3.fromRGB(145, 145, 145)
+unlockStroke.Transparency = 0.2
+unlockStroke.Thickness = 1
+
+local unlockTitle = Instance.new("TextLabel", unlockPanel)
+unlockTitle.Size = UDim2.new(1, -24, 0, 20)
+unlockTitle.Position = UDim2.new(0, 12, 0, 12)
+unlockTitle.BackgroundTransparency = 1
+unlockTitle.Text = "ENTER KEY"
+unlockTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+unlockTitle.Font = Enum.Font.GothamBold
+unlockTitle.TextSize = 11
+unlockTitle.TextXAlignment = Enum.TextXAlignment.Left
+unlockTitle.ZIndex = 22
+
+local unlockInput = Instance.new("TextBox", unlockPanel)
+unlockInput.Size = UDim2.new(1, -94, 0, 34)
+unlockInput.Position = UDim2.new(0, 12, 0, 45)
+unlockInput.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+unlockInput.BackgroundTransparency = 0.05
+unlockInput.BorderSizePixel = 0
+unlockInput.PlaceholderText = "Enter Key"
+unlockInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+unlockInput.Text = ""
+unlockInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+unlockInput.Font = Enum.Font.GothamBold
+unlockInput.TextSize = 11
+unlockInput.ClearTextOnFocus = false
+unlockInput.ZIndex = 22
+
+Instance.new("UICorner", unlockInput).CornerRadius = UDim.new(0, 8)
+
+local unlockButton = Instance.new("TextButton", unlockPanel)
+unlockButton.Size = UDim2.fromOffset(62, 34)
+unlockButton.Position = UDim2.new(1, -74, 0, 45)
+unlockButton.BackgroundColor3 = Color3.fromRGB(105, 105, 105)
+unlockButton.BorderSizePixel = 0
+unlockButton.Text = "ENTER"
+unlockButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+unlockButton.Font = Enum.Font.GothamBold
+unlockButton.TextSize = 10
+unlockButton.AutoButtonColor = false
+unlockButton.ZIndex = 22
+
+Instance.new("UICorner", unlockButton).CornerRadius = UDim.new(0, 8)
+
+local unlockStatus = Instance.new("TextLabel", unlockPanel)
+unlockStatus.Size = UDim2.new(1, -24, 0, 18)
+unlockStatus.Position = UDim2.new(0, 12, 1, -22)
+unlockStatus.BackgroundTransparency = 1
+unlockStatus.Text = ""
+unlockStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+unlockStatus.Font = Enum.Font.GothamBold
+unlockStatus.TextSize = 9
+unlockStatus.TextXAlignment = Enum.TextXAlignment.Left
+unlockStatus.ZIndex = 22
+
+
+local refreshHostUI
+local updateTriggerBindText
+local setTriggerBinding
+
+local function tryUnlock()
+    if SCRIPT_KILLED or MENU_UNLOCKED then
+        return
+    end
+
+    local enteredKey = string.lower(unlockInput.Text or "")
+    enteredKey = enteredKey:gsub("^%s+", ""):gsub("%s+$", "")
+    local validKey = false
+
+    for _, workingKey in ipairs(WORKING_KEYS) do
+        local normalizedKey = string.lower(tostring(workingKey))
+        normalizedKey = normalizedKey:gsub("^%s+", ""):gsub("%s+$", "")
+
+        if enteredKey == normalizedKey then
+            validKey = true
+            break
+        end
+    end
+
+    if validKey then
+        MENU_UNLOCKED = true
+        unlockStatus.Text = "ACCESS GRANTED"
+        unlockButton.Text = "UNLOCKED"
+
+        task.wait(0.12)
+
+        if unlockPanel.Parent then
+            unlockPanel:Destroy()
+        end
+
+        if unlockImage.Parent then
+            unlockImage:Destroy()
+        end
+
+        triggerSection.Visible = true
+        speedSection.Visible = true
+
+        -- Show the corner anime image only after the key screen is finished.
+        if cornerAnimeImage.Parent then
+            cornerAnimeImage.Visible = true
+        end
+
+        task.defer(function()
+            if SCRIPT_KILLED or not MENU_UNLOCKED then
+                return
+            end
+            triggerSection.Visible = true
+            refreshHostUI()
+        end)
+    else
+        unlockStatus.Text = "INVALID KEY"
+        unlockInput.Text = ""
+        unlockInput:CaptureFocus()
+    end
+end
+
+unlockButton.MouseButton1Click:Connect(tryUnlock)
+
+unlockInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        tryUnlock()
+    end
+end)
+
+task.defer(function()
+    if unlockInput.Parent and not SCRIPT_KILLED then
+        unlockInput:CaptureFocus()
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+
+    if SCRIPT_KILLED or not MENU_UNLOCKED then return end
+
+    if TRIGGER_BIND_LISTENING then
+        if setTriggerBinding(input) then
+            return
+        end
+    end
+
+    if gameProcessed then return end
+
+    local matches = (TRIGGER_KEY and input.UserInputType == TRIGGER_KEY)
+        or (TRIGGER_KEYCODE ~= Enum.KeyCode.Unknown and input.KeyCode == TRIGGER_KEYCODE)
+
+    if matches then
+        if TRIGGER_MODE == "Toggle" then
+            TRIGGER_TOGGLED = not TRIGGER_TOGGLED
+            TRIGGER_HELD = TRIGGER_TOGGLED
+            if not TRIGGER_HELD then
+                HOST_TRIGGER_ARMED = false
+                AIM_ASSIST_TARGET = nil
+            end
+        else
+            TRIGGER_HELD = true
+            TRIGGER_TOGGLED = false
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if SCRIPT_KILLED or not MENU_UNLOCKED then return end
+
+    local matches = (TRIGGER_KEY and input.UserInputType == TRIGGER_KEY)
+        or (TRIGGER_KEYCODE ~= Enum.KeyCode.Unknown and input.KeyCode == TRIGGER_KEYCODE)
+
+    if matches and TRIGGER_MODE == "Hold" then
+        TRIGGER_HELD = false
+        TRIGGER_TOGGLED = false
+        HOST_TRIGGER_ARMED = false
+        AIM_ASSIST_TARGET = nil
+        if selectedActivator then
+            target1Status.Text = "HOST: " .. selectedActivator.Name .. " — " .. (TRIGGER_MODE == "Toggle" and "toggle " or "hold ") .. TRIGGER_KEY_LABEL .. " before the shot."
+        end
+    end
+end)
+
+-- =========================================================
+-- HOST UI / KEYBIND
+-- =========================================================
+
+updateTriggerBindText = function()
+    if triggerKeyButton and triggerKeyButton.Parent then
+        triggerKeyButton.Text = TRIGGER_BIND_LISTENING and "PRESS A KEY..." or TRIGGER_KEY_LABEL
+    end
+end
+
+setTriggerBinding = function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.KeyCode == Enum.KeyCode.Unknown then
+            return false
+        end
+        TRIGGER_KEY = nil
+        TRIGGER_KEYCODE = input.KeyCode
+        TRIGGER_KEY_LABEL = input.KeyCode.Name
+    else
+        TRIGGER_KEY = input.UserInputType
+        TRIGGER_KEYCODE = Enum.KeyCode.Unknown
+        TRIGGER_KEY_LABEL = input.UserInputType.Name
+    end
+
+    TRIGGER_HELD = false
+    HOST_TRIGGER_ARMED = false
+    TRIGGER_TOGGLED = false
+    TRIGGER_BIND_LISTENING = false
+    updateTriggerBindText()
+    if selectedActivator then
+        target1Status.Text = "HOST: " .. selectedActivator.Name .. " — " .. (TRIGGER_MODE == "Toggle" and "toggle " or "hold ") .. TRIGGER_KEY_LABEL .. " before the shot."
+    end
+    return true
+end
+
+triggerKeyButton.MouseButton1Click:Connect(function()
+    if SCRIPT_KILLED or not MENU_UNLOCKED then return end
+    TRIGGER_BIND_LISTENING = true
+    updateTriggerBindText()
+end)
+
+refreshHostUI = function()
+    if SCRIPT_KILLED or not MENU_UNLOCKED or not whitelistGui.Parent then
+        return
+    end
+    triggerSection.Visible = true
+    keybindSection.Visible = true
+    speedSection.Visible = true
+    aimAssistSection.Visible = true
+    rebuildHostList()
+    speedInput.Text = tostring(HOST_DELAY_MS)
+    aimRangeInput.Text = tostring(AIM_ASSIST_RADIUS)
+    aimStrengthInput.Text = tostring(math.floor(math.clamp(AIM_ASSIST_STRENGTH * 1000, 0, 100) + 0.5))
+    updateTriggerModeUI()
+end
+
+
+-- =========================================================
+-- DRAGGING + RESIZING
+-- =========================================================
+
+local resizeHandle
+
+local dragging = false
+local dragStart
+local startPosition
+
+local resizing = false
+local resizeStart
+local originalSize
+
+local function pointInsideGuiObject(position, object)
+    if not object or not object.Parent then
+        return false
+    end
+
+    local objectPos = object.AbsolutePosition
+    local objectSize = object.AbsoluteSize
+
+    return
+        position.X >= objectPos.X
+        and position.X <= objectPos.X + objectSize.X
+        and position.Y >= objectPos.Y
+        and position.Y <= objectPos.Y + objectSize.Y
+end
+
+-- Startup size is also the minimum allowed size.
+-- Users can resize larger, but never smaller than this.
+local MIN_WIDTH = 300
+local MIN_HEIGHT = 650
+
+local function pointInsideCard(position)
+
+    local cardPos =
+        wlCard.AbsolutePosition
+
+    local cardSize =
+        wlCard.AbsoluteSize
+
+    return
+        position.X >= cardPos.X
+        and position.X <=
+            cardPos.X + cardSize.X
+        and position.Y >= cardPos.Y
+        and position.Y <=
+            cardPos.Y + cardSize.Y
+
+end
+
+local function isOverResizeHandle(position)
+
+    if not resizeHandle then
+        return false
+    end
+
+    local handlePos =
+        resizeHandle.AbsolutePosition
+
+    local handleSize =
+        resizeHandle.AbsoluteSize
+
+    return
+        position.X >= handlePos.X
+        and position.X <=
+            handlePos.X + handleSize.X
+        and position.Y >= handlePos.Y
+        and position.Y <=
+            handlePos.Y + handleSize.Y
+
+end
+
+-- =========================================================
+-- RESIZE HANDLE
+-- =========================================================
+
+resizeHandle =
+    Instance.new(
+        "Frame",
+        wlCard
+    )
+
+resizeHandle.Name =
+    "ResizeHandle"
+
+resizeHandle.Size =
+    UDim2.fromOffset(20, 20)
+
+resizeHandle.Position =
+    UDim2.new(
+        1,
+        -20,
+        1,
+        -20
+    )
+
+resizeHandle.BackgroundTransparency = 1
+resizeHandle.BorderSizePixel = 0
+resizeHandle.ZIndex = 20
+resizeHandle.Active = true
+
+-- =========================================================
+-- THREE-DOT RESIZE DESIGN
+-- =========================================================
+
+for i = 0, 2 do
+
+    local dot =
+        Instance.new(
+            "Frame",
+            resizeHandle
+        )
+
+    dot.Name =
+        "ResizeDot"
+
+    dot.Size =
+        UDim2.fromOffset(4, 4)
+
+    dot.Position =
+        UDim2.new(
+            0,
+            5 + i * 5,
+            0,
+            15 - i * 5
+        )
+
+    dot.BackgroundColor3 =
+        Color3.fromRGB(190, 190, 190)
+
+    dot.BackgroundTransparency = 0.15
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 21
+    dot.Active = false
+
+    Instance.new(
+        "UICorner",
+        dot
+    ).CornerRadius =
+        UDim.new(1, 0)
+
+end
+
+-- =========================================================
+-- START DRAG / RESIZE
+-- =========================================================
+
+UserInputService.InputBegan:Connect(
+    function(input)
+
+        if SCRIPT_KILLED then
+            return
+        end
+
+        if input.UserInputType ~=
+            Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        if isOverResizeHandle(
+            input.Position
+        ) then
+
+            resizing = true
+            resizeStart = input.Position
+            originalSize = wlCard.AbsoluteSize
+
+            return
+        end
+
+        if pointInsideCard(
+            input.Position
+        ) then
+
+            -- Search/input fields must never start panel dragging.
+            -- The rest of the card remains draggable as before.
+            if pointInsideGuiObject(input.Position, hostSearchBox)
+                or pointInsideGuiObject(input.Position, hostList)
+                or pointInsideGuiObject(input.Position, triggerKeyButton)
+                or pointInsideGuiObject(input.Position, speedInput)
+                    or pointInsideGuiObject(input.Position, aimAssistSection) then
+                return
+            end
+
+            if unlockInput and unlockInput.Parent
+                and pointInsideGuiObject(input.Position, unlockInput) then
+                return
+            end
+
+            dragging = true
+            dragStart = input.Position
+            startPosition = wlCard.Position
+
+        end
+
+    end
+)
+
+-- =========================================================
+-- MOUSE MOVEMENT
+-- =========================================================
+
+UserInputService.InputChanged:Connect(
+    function(input)
+
+        if SCRIPT_KILLED then
+            return
+        end
+
+        if input.UserInputType ~=
+            Enum.UserInputType.MouseMovement then
+            return
+        end
+
+        if resizing then
+
+            local delta =
+                input.Position - resizeStart
+
+            local newWidth =
+                math.max(
+                    MIN_WIDTH,
+                    originalSize.X + delta.X
+                )
+
+            local newHeight =
+                math.max(
+                    MIN_HEIGHT,
+                    originalSize.Y + delta.Y
+                )
+
+            wlCard.Size =
+                UDim2.fromOffset(
+                    newWidth,
+                    newHeight
+                )
+
+            return
+        end
+
+        if dragging then
+
+            local delta =
+                input.Position - dragStart
+
+            wlCard.Position =
+                UDim2.new(
+                    startPosition.X.Scale,
+                    startPosition.X.Offset
+                        + delta.X,
+
+                    startPosition.Y.Scale,
+                    startPosition.Y.Offset
+                        + delta.Y
+                )
+
+        end
+
+    end
+)
+
+-- =========================================================
+-- END DRAG / RESIZE
+-- =========================================================
+
+UserInputService.InputEnded:Connect(
+    function(input)
+
+        if SCRIPT_KILLED then
+            return
+        end
+
+        if input.UserInputType ==
+            Enum.UserInputType.MouseButton1 then
+
+            dragging = false
+            resizing = false
+
+        end
+
+    end
+)
+
+-- Ensure the player list is populated immediately if the menu is already unlocked.
+if MENU_UNLOCKED then
+    task.defer(refreshHostUI)
+end
+
+-- =========================================================
+-- F4 TOGGLE
+-- =========================================================
+
+UserInputService.InputBegan:Connect(
+    function(
+        input,
+        gameProcessed
+    )
+
+        if gameProcessed or SCRIPT_KILLED then
+            return
+        end
+
+        if input.KeyCode ==
+            Enum.KeyCode.F4 then
+
+            whitelistGui.Enabled =
+                not whitelistGui.Enabled
+
+            if whitelistGui.Enabled and MENU_UNLOCKED then
+                refreshHostUI()
+            end
+
+        end
+
+    end
+)
+
+-- =========================================================
+-- INITIALIZE
+-- =========================================================
+
+refreshHostUI()
+
+-- =========================================================
+-- TRIGGERBOT
+-- =========================================================
+
+local getPlayerFromCharacter = Players.GetPlayerFromCharacter
+local lastTargetCharacter = nil
+local lastTargetPlayer = nil
+local targetPlayerCache = setmetatable({}, { __mode = "k" })
+
+local function getPlayerFromTargetFast(target)
+    if not target then
+        lastTargetCharacter = nil
+        lastTargetPlayer = nil
+        return nil
+    end
+
+    local character = target.Parent
+
+    if not character or not character:IsA("Model") then
+        character = target:FindFirstAncestorOfClass("Model")
+    end
+
+    if not character then
+        lastTargetCharacter = nil
+        lastTargetPlayer = nil
+        return nil
+    end
+
+    if character == lastTargetCharacter then
+        return lastTargetPlayer
+    end
+
+    lastTargetCharacter = character
+
+    local cached = targetPlayerCache[character]
+    if cached ~= nil then
+        lastTargetPlayer = cached ~= false and cached or nil
+        return lastTargetPlayer
+    end
+
+    local player = getPlayerFromCharacter(Players, character)
+    targetPlayerCache[character] = player or false
+    lastTargetPlayer = player
+
+    return player
+end
+
+
+local function isTargetKnocked(character, humanoid)
+    if not character or not humanoid or humanoid.Health <= 0 then
+        return true
+    end
+
+    -- Common KO/downed value patterns.
+    local bodyEffects = character:FindFirstChild("BodyEffects")
+    if bodyEffects then
+        for _, name in ipairs({"K.O", "KO", "Knocked", "Downed"}) do
+            local value = bodyEffects:FindFirstChild(name)
+            if value and value:IsA("BoolValue") and value.Value then
+                return true
+            end
+        end
+    end
+
+    -- Also support games that store the state as an attribute.
+    for _, name in ipairs({"K.O", "KO", "Knocked", "Downed"}) do
+        if character:GetAttribute(name) == true then
+            return true
+        end
+    end
+
+    -- Ragdoll/knock states used by many character controllers.
+    local state = humanoid:GetState()
+    if state == Enum.HumanoidStateType.Dead
+        or state == Enum.HumanoidStateType.FallingDown
+        or state == Enum.HumanoidStateType.Physics
+        or state == Enum.HumanoidStateType.PlatformStanding then
+        return true
+    end
+
+    return false
+end
+
+local function getAimAssistTarget(camera)
+    local viewport = camera.ViewportSize
+    local screenCenter = Vector2.new(viewport.X * 0.5, viewport.Y * 0.5)
+    local bestPart = nil
+    local bestDistance = AIM_ASSIST_RADIUS
+
+    for _, candidate in ipairs(Players:GetPlayers()) do
+        if candidate ~= LocalPlayer then
+            local character = candidate.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            local torso = character and (
+                character:FindFirstChild("UpperTorso")
+                or character:FindFirstChild("Torso")
+                or root
+            )
+
+            if humanoid and not isTargetKnocked(character, humanoid) and torso and torso:IsA("BasePart") then
+                local screenPos, visible = camera:WorldToViewportPoint(torso.Position)
+                if visible and screenPos.Z > 0 then
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                    if distance < bestDistance then
+                        -- Do not assist through solid map geometry.
+                        local rayParams = RaycastParams.new()
+                        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                        rayParams.FilterDescendantsInstances = {
+                            LocalPlayer.Character,
+                            character
+                        }
+
+                        local direction = torso.Position - camera.CFrame.Position
+                        local blocked = workspace:Raycast(
+                            camera.CFrame.Position,
+                            direction,
+                            rayParams
+                        )
+
+                        if not blocked then
+                            bestDistance = distance
+                            bestPart = torso
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return bestPart
+end
+
+RunService:BindToRenderStep("Triggerbot_RenderStep", Enum.RenderPriority.Input.Value + 1, function()
+    if SCRIPT_KILLED or not MENU_UNLOCKED or not selectedActivator then
+        return
+    end
+
+    -- While the trigger key is held, make a very small correction toward the
+    -- nearest visible body/torso target near the crosshair. Releasing the key
+    -- immediately stops the correction.
+    if AIM_ASSIST_ENABLED and TRIGGER_HELD then
+        local assistCamera = workspace.CurrentCamera
+        if assistCamera then
+            -- If the locked target dies/gets knocked, stop the assist immediately.
+            -- Do not retarget another player while the trigger is still held.
+            if AIM_ASSIST_TARGET then
+                local oldCharacter = AIM_ASSIST_TARGET.Parent
+                local oldHumanoid = oldCharacter and oldCharacter:FindFirstChildOfClass("Humanoid")
+
+                if not oldHumanoid or isTargetKnocked(oldCharacter, oldHumanoid) then
+                    AIM_ASSIST_TARGET = nil
+                    return
+                end
+            end
+
+            -- Acquire a target only when we do not already have one.
+            if not AIM_ASSIST_TARGET then
+                AIM_ASSIST_TARGET = getAimAssistTarget(assistCamera)
+            end
+
+            if AIM_ASSIST_TARGET then
+                local targetCharacter = AIM_ASSIST_TARGET.Parent
+                local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+
+                if targetHumanoid and not isTargetKnocked(targetCharacter, targetHumanoid) then
+                    if AIM_ASSIST_STRENGTH > 0 then
+                        local cameraPosition = assistCamera.CFrame.Position
+                        local desired = CFrame.lookAt(cameraPosition, AIM_ASSIST_TARGET.Position)
+                        assistCamera.CFrame = assistCamera.CFrame:Lerp(desired, AIM_ASSIST_STRENGTH)
+                    end
+                else
+                    AIM_ASSIST_TARGET = nil
+                end
+            end
+        end
+    else
+        -- Releasing the trigger resets the lock so a new target can be acquired.
+        AIM_ASSIST_TARGET = nil
+    end
+
+    -- A HOST shot arms the triggerbot. The trigger key must also be held.
+    -- Releasing the trigger key clears the arm, so another HOST shot is
+    -- required before it can activate again.
+    if not HOST_TRIGGER_ARMED or not TRIGGER_HELD then
+        return
+    end
+
+    if hostHasMeleeWeapon(selectedActivator) then
+        HOST_TRIGGER_ARMED = false
+        activatorPulseUntil = 0
+        activatorFireAt = 0
+        return
+    end
+
+    -- Wait a small amount after the HOST shot is detected before the first
+    -- trigger click. This does not depend on the beam/tracer disappearing.
+    if os.clock() < activatorFireAt then
+        return
+    end
+
+    -- Use the camera ray as the primary target check. This is more reliable
+    -- than Mouse.Target when the target moves or the cursor is over an
+    -- accessory/transparent part. Fall back to Mouse.Target if needed.
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+
+    local character
+    local player
+    local viewport = camera.ViewportSize
+    local ray = camera:ViewportPointToRay(viewport.X * 0.5, viewport.Y * 0.5)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+
+    local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+    local target = result and result.Instance or Mouse.Target
+
+    if not target or not target:IsA("BasePart") then
+        lastTargetCharacter = nil
+        lastTargetPlayer = nil
+        return
+    end
+
+    local ancestor = target.Parent
+    while ancestor do
+        if ancestor:IsA("Model") then
+            local candidate = Players:GetPlayerFromCharacter(ancestor)
+            if candidate then
+                character = ancestor
+                player = candidate
+                break
+            end
+        end
+        ancestor = ancestor.Parent
+    end
+
+    if not character or not player then
+        lastTargetCharacter = nil
+        lastTargetPlayer = nil
+        return
+    end
+
+    -- Always use NORMAL targeting: the exact BasePart under the crosshair
+    -- is accepted; there are no head-only or torso-only modes.
+    local targetPart = target
+
+    if not targetPart:IsA("BasePart") then
+        lastTargetCharacter = nil
+        lastTargetPlayer = nil
+        return
+    end
+
+    if not player or player == LocalPlayer then
+        return
+    end
+
+    -- There is NO Target 2 whitelist/blacklist. Every other player is a
+    -- valid target; Target 2 is simply whoever the crosshair is on.
+    mouse1press()
+    mouse1release()
+
+    -- Keep the trigger active until the Target 1 activation window expires.
+    -- This makes one detected shot turn the triggerbot on rather than
+    -- producing only one click.
+end)
